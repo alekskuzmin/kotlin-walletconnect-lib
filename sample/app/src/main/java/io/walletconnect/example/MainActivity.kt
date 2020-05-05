@@ -1,11 +1,17 @@
 package io.walletconnect.example
 
-import android.app.Activity
-import android.os.Bundle
-import kotlinx.android.synthetic.main.screen_main.*
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.view.View
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.snackbar.Snackbar
+import kotlinx.android.synthetic.main.screen_main.coordinator
+import kotlinx.android.synthetic.main.screen_main.screen_main_connect_button
+import kotlinx.android.synthetic.main.screen_main.screen_main_disconnect_button
+import kotlinx.android.synthetic.main.screen_main.screen_main_response
+import kotlinx.android.synthetic.main.screen_main.screen_main_status
+import kotlinx.android.synthetic.main.screen_main.screen_main_tx_button
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -13,13 +19,13 @@ import org.walletconnect.Session
 import org.walletconnect.nullOnThrow
 
 
-class MainActivity : Activity(), Session.Callback {
+class MainActivity : AppCompatActivity(), Session.Callback {
 
     private var txRequest: Long? = null
     private val uiScope = CoroutineScope(Dispatchers.Main)
 
     override fun onStatus(status: Session.Status) {
-        when(status) {
+        when (status) {
             Session.Status.Approved -> sessionApproved()
             Session.Status.Closed -> sessionClosed()
             Session.Status.Connected,
@@ -32,6 +38,7 @@ class MainActivity : Activity(), Session.Callback {
 
     override fun onMethodCall(call: Session.MethodCall) {
     }
+
     private fun sessionApproved() {
         uiScope.launch {
             screen_main_status.text = "Connected: ${ExampleApplication.session.approvedAccounts()}"
@@ -61,9 +68,13 @@ class MainActivity : Activity(), Session.Callback {
         screen_main_connect_button.setOnClickListener {
             ExampleApplication.resetSession()
             ExampleApplication.session.addCallback(this)
-            val i = Intent(Intent.ACTION_VIEW)
-            i.data = Uri.parse(ExampleApplication.config.toWCUri())
-            startActivity(i)
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.data = Uri.parse(ExampleApplication.config.toWCUri())
+            if (canHandleIntent(intent)) {
+                startActivity(intent)
+            } else {
+                showErrorSnack("No application found to handle intent")
+            }
         }
         screen_main_disconnect_button.setOnClickListener {
             ExampleApplication.session.kill()
@@ -89,6 +100,15 @@ class MainActivity : Activity(), Session.Callback {
         }
     }
 
+    private fun showErrorSnack(text: String) {
+        Snackbar.make(coordinator, text,
+                Snackbar.LENGTH_LONG).show()
+    }
+
+    private fun canHandleIntent(intent: Intent): Boolean {
+        return packageManager.queryIntentActivities(intent, 0).size > 0
+    }
+
     private fun initialSetup() {
         val session = nullOnThrow { ExampleApplication.session } ?: return
         session.addCallback(this)
@@ -100,7 +120,8 @@ class MainActivity : Activity(), Session.Callback {
             txRequest = null
             uiScope.launch {
                 screen_main_response.visibility = View.VISIBLE
-                screen_main_response.text = "Last response: " + ((resp.result as? String) ?: "Unknown response")
+                screen_main_response.text = "Last response: " + ((resp.result as? String)
+                        ?: "Unknown response")
             }
         }
     }
@@ -109,4 +130,5 @@ class MainActivity : Activity(), Session.Callback {
         ExampleApplication.session.removeCallback(this)
         super.onDestroy()
     }
+
 }
